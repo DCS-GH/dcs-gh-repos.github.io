@@ -34,7 +34,7 @@ jobs:
         run: npm run build
         env:
           ORG_NAME: DCS-GH
-          REPO_TYPE: public
+          REPO_TYPE: all
           INCLUDE_FORKS: "false"
           CATALOG_TITLE: DCS-GH Repositories
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
