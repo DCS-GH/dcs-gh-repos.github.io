@@ -7,149 +7,150 @@ const title = process.env.CATALOG_TITLE || `${org} Repository Catalog`;
 const generatedAt = new Date().toISOString();
 
 const token = (
-  process.env.CATALOG_GITHUB_TOKEN ||
-  process.env.GH_TOKEN ||
-  ""
+    process.env.CATALOG_GITHUB_TOKEN ||
+    process.env.GH_TOKEN ||
+    ""
 ).trim();
 
 const headers = {
-  "Accept": "application/vnd.github+json",
-  "X-GitHub-Api-Version": "2022-11-28",
-  "User-Agent": `${org}-repo-catalog`
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": `${org}-repo-catalog`
 };
 
 if (token) {
-  headers.Authorization = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
 }
 
 async function github(path) {
-  const response = await fetch(`https://api.github.com${path}`, { headers });
+    const response = await fetch(`https://api.github.com${path}`, { headers });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`GitHub API failed: ${response.status} ${response.statusText}\n${body}`);
-  }
+    if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`GitHub API failed: ${response.status} ${response.statusText}\n${body}`);
+    }
 
-  return response.json();
+    return response.json();
 }
 
 async function getAllPages(path) {
-  const results = [];
-  let page = 1;
+    const results = [];
+    let page = 1;
 
-  while (true) {
-    const joiner = path.includes("?") ? "&" : "?";
-    const data = await github(`${path}${joiner}per_page=100&page=${page}`);
+    while (true) {
+        const joiner = path.includes("?") ? "&" : "?";
+        const data = await github(`${path}${joiner}per_page=100&page=${page}`);
 
-    if (!Array.isArray(data) || data.length === 0) {
-      break;
+        if (!Array.isArray(data) || data.length === 0) {
+            break;
+        }
+
+        results.push(...data);
+
+        if (data.length < 100) {
+            break;
+        }
+
+        page += 1;
     }
 
-    results.push(...data);
-
-    if (data.length < 100) {
-      break;
-    }
-
-    page += 1;
-  }
-
-  return results;
+    return results;
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
 }
 
 function safeUrl(value) {
-  if (!value) return "";
+    if (!value) return "";
 
-  try {
-    const url = new URL(value);
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      return url.href;
+    try {
+        const url = new URL(value);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+            return url.href;
+        }
+    } catch {
+        return "";
     }
-  } catch {
-    return "";
-  }
 
-  return "";
+    return "";
 }
 
 function buildCustomPropertyMap(rows) {
-  const map = new Map();
+    const map = new Map();
 
-  for (const row of rows) {
-    const properties = {};
+    for (const row of rows) {
+        const properties = {};
 
-    for (const property of row.properties || []) {
-      properties[property.property_name] = property.value;
+        for (const property of row.properties || []) {
+            properties[property.property_name] = property.value;
+        }
+
+        map.set(row.repository_full_name, properties);
     }
 
-    map.set(row.repository_full_name, properties);
-  }
-
-  return map;
+    return map;
 }
 
 const repos = await getAllPages(
-  `/orgs/${encodeURIComponent(org)}/repos?type=${encodeURIComponent(repoType)}&sort=full_name&direction=asc`
+    `/orgs/${encodeURIComponent(org)}/repos?type=${encodeURIComponent(repoType)}&sort=full_name&direction=asc`
 );
 
 let customProperties = new Map();
 
 try {
-  const rows = await getAllPages(`/orgs/${encodeURIComponent(org)}/properties/values`);
-  customProperties = buildCustomPropertyMap(rows);
+    const rows = await getAllPages(`/orgs/${encodeURIComponent(org)}/properties/values`);
+    customProperties = buildCustomPropertyMap(rows);
 } catch (error) {
-  console.warn("Custom properties could not be read. Continuing without owner metadata.");
-  console.warn(error.message);
+    console.warn("Custom properties could not be read. Continuing without owner metadata.");
+    console.warn(error.message);
 }
 
 const catalog = repos
-  .filter((repo) => includeForks || !repo.fork)
-  .map((repo) => {
-    const props = customProperties.get(repo.full_name) || {};
+    .filter((repo) => includeForks || !repo.fork)
+    .filter((repo) => repo.name !== "dcs-gh-repos.github.io")
+    .map((repo) => {
+        const props = customProperties.get(repo.full_name) || {};
 
-    return {
-      name: repo.name,
-      full_name: repo.full_name,
-      url: repo.html_url,
-      description: repo.description || "",
-      service_owner: props.service_owner || props.owner || "Unassigned",
-      business_area: props.business_area || "",
-      lifecycle: props.lifecycle || "",
-      documentation_url: safeUrl(props.documentation_url || repo.homepage || ""),
-      language: repo.language || "",
-      visibility: repo.visibility || (repo.private ? "private" : "public"),
-      archived: Boolean(repo.archived),
-      fork: Boolean(repo.fork),
-      pushed_at: repo.pushed_at,
-      updated_at: repo.updated_at,
-      topics: repo.topics || []
-    };
-  });
+        return {
+            name: repo.name,
+            full_name: repo.full_name,
+            url: repo.html_url,
+            description: repo.description || "",
+            service_owner: props.service_owner || props.owner || "Unassigned",
+            business_area: props.business_area || "",
+            lifecycle: props.lifecycle || "",
+            documentation_url: safeUrl(props.documentation_url || repo.homepage || ""),
+            language: repo.language || "",
+            visibility: repo.visibility || (repo.private ? "private" : "public"),
+            archived: Boolean(repo.archived),
+            fork: Boolean(repo.fork),
+            pushed_at: repo.pushed_at,
+            updated_at: repo.updated_at,
+            topics: repo.topics || []
+        };
+    });
 
 await fs.mkdir("dist", { recursive: true });
 
 await fs.writeFile("dist/repos.json", JSON.stringify(catalog, null, 2));
 
 const repoRows = catalog.map((repo) => {
-  const repoUrl = safeUrl(repo.url);
-  const docsUrl = safeUrl(repo.documentation_url);
-  const pushedDate = repo.pushed_at ? new Date(repo.pushed_at).toISOString().slice(0, 10) : "";
+    const repoUrl = safeUrl(repo.url);
+    const docsUrl = safeUrl(repo.documentation_url);
+    const pushedDate = repo.pushed_at ? new Date(repo.pushed_at).toISOString().slice(0, 10) : "";
 
-  const badges = [
-    repo.visibility,
-    repo.archived ? "archived" : "",
-    repo.lifecycle
-  ].filter(Boolean);
+    const badges = [
+        repo.visibility,
+        repo.archived ? "archived" : "",
+        repo.lifecycle
+    ].filter(Boolean);
 
-  return `
+    return `
     <tr>
       <td>
         <a href="${escapeHtml(repoUrl)}">${escapeHtml(repo.name)}</a>
