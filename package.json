@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/generate-catalog.mjs"
+    "build": "node --env-file-if-exists=.env scripts/generate-catalog.mjs"
   }
 }
