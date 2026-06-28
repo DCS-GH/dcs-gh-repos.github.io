@@ -6,14 +6,18 @@ import { createGitHubClient, buildCustomPropertyMap } from "./lib/github.mjs";
 import { safeUrl } from "./lib/format.mjs";
 import { renderPage } from "./lib/template.mjs";
 
+// Resolve the script's own directory so static assets (styles.css) can be copied
+// regardless of the current working directory the build is invoked from.
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
+// Build configuration, all overridable via environment variables (see README).
 const org = process.env.ORG_NAME || "DCS-GH";
 const repoType = process.env.REPO_TYPE || "public";
 const includeForks = (process.env.INCLUDE_FORKS || "false").toLowerCase() === "true";
 const title = process.env.CATALOG_TITLE || `${org} Repository Catalog`;
 const generatedAt = new Date().toISOString();
 
+// Prefer a dedicated catalog token, falling back to a generic GH_TOKEN; either may be absent.
 const token = (
     process.env.CATALOG_GITHUB_TOKEN ||
     process.env.GH_TOKEN ||
@@ -26,6 +30,8 @@ const repos = await getAllPages(
     `/orgs/${encodeURIComponent(org)}/repos?type=${encodeURIComponent(repoType)}&sort=full_name&direction=asc`
 );
 
+// Custom properties require auth/permissions that may be unavailable (e.g. local runs).
+// Treat failure as non-fatal so the catalog still builds, just without owner metadata.
 let customProperties = new Map();
 
 try {
@@ -36,6 +42,8 @@ try {
     console.warn(error.message);
 }
 
+// Shape the raw API repos into the flat records the template and repos.json consume.
+// Forks are excluded unless opted in, and the catalog repo itself is filtered out.
 const catalog = repos
     .filter((repo) => includeForks || !repo.fork)
     .filter((repo) => repo.name !== "dcs-gh-repos.github.io")
@@ -61,6 +69,8 @@ const catalog = repos
         };
     });
 
+// Emit the build output into dist/ (the folder published to GitHub Pages):
+// the raw JSON, the static stylesheet, and the rendered HTML page.
 await fs.mkdir("dist", { recursive: true });
 
 await fs.writeFile("dist/repos.json", JSON.stringify(catalog, null, 2));

@@ -1,3 +1,5 @@
+// Escape user/API-supplied values before interpolating them into HTML to prevent injection.
+// Ampersand is replaced first so the entities emitted below aren't themselves re-escaped.
 export function escapeHtml(value) {
     return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -6,6 +8,8 @@ export function escapeHtml(value) {
         .replaceAll('"', "&quot;");
 }
 
+// Allow a URL only if it parses and uses http/https; anything else (e.g. a javascript:
+// scheme) or unparseable input returns "" so it can never become a link target.
 export function safeUrl(value) {
     if (!value) return "";
 

@@ -1,10 +1,14 @@
 import { escapeHtml, safeUrl } from "./format.mjs";
 
+// Render a single repository as a table row. Every interpolated value is escaped, and
+// links are passed through safeUrl so untrusted metadata can't inject markup or bad schemes.
 function renderRow(repo) {
     const repoUrl = safeUrl(repo.url);
     const docsUrl = safeUrl(repo.documentation_url);
+    // Show just the date portion (YYYY-MM-DD) of the ISO timestamp; blank if never pushed.
     const pushedDate = repo.pushed_at ? new Date(repo.pushed_at).toISOString().slice(0, 10) : "";
 
+    // Collect status badges, dropping empty/false entries so only meaningful ones render.
     const badges = [
         repo.visibility,
         repo.archived ? "archived" : "",
@@ -29,6 +33,7 @@ function renderRow(repo) {
   `;
 }
 
+// Assemble the full static HTML page from the catalog data.
 export function renderPage({ title, org, catalog, generatedAt }) {
     const repoRows = catalog.map(renderRow).join("");
 
@@ -74,6 +79,8 @@ export function renderPage({ title, org, catalog, generatedAt }) {
   </main>
 
   <script>
+    // Client-side filter: hide any row whose visible text doesn't contain the query.
+    // Rows are cached once up front since the table is static after generation.
     const search = document.getElementById("search");
     const rows = Array.from(document.querySelectorAll("#repo-table tbody tr"));
 
